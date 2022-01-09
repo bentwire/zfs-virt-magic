@@ -1,0 +1,28 @@
+#!/bin/bash
+FULLNAME=$1
+TMPXMHELL=$(mktemp)
+
+export POOL="${FULLNAME%%/*}"
+export ZVOL="${FULLNAME##*/}"
+sudo targetcli "/backstores/block/ create ${ZVOL} dev=/dev/zvol/${FULLNAME}"
+sudo targetcli "/iscsi create iqn.2003-01.org.linux-iscsi.celestis.x8664:${ZVOL}"
+sudo targetcli "/iscsi/iqn.2003-01.org.linux-iscsi.celestis.x8664:${ZVOL}/tpg1/luns create /backstores/block/${ZVOL}"
+sudo targetcli "/iscsi/iqn.2003-01.org.linux-iscsi.celestis.x8664:${ZVOL}/tpg1/acls create iqn.1993-08.org.debian:01:e0741deca62"
+
+cat > ${TMPXMHELL} <<-XMHELL
+<pool type='iscsi'>
+  <name>${ZVOL}</name>
+  <source>
+    <host name='192.168.10.30' port='3260'/>
+    <device path="iqn.2003-01.org.linux-iscsi.celestis.x8664:${ZVOL}"/>
+  </source>
+  <target>
+    <path>/dev/disk/by-path</path>
+  </target>
+</pool>
+XMHELL
+ 
+virsh pool-define ${TMPXMHELL}
+virsh pool-start ${ZVOL}
+virsh pool-autostart ${ZVOL}
+rm -f ${TMPXMHELL}
