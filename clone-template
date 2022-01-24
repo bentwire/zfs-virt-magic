@@ -1,0 +1,26 @@
+#!/bin/bash
+TEMPLATE=$1
+FULLNAME=$2
+RAM=$3
+CPUS=$4
+TMPXMHELL=$(mktemp)
+
+export POOL="${FULLNAME%%/*}"
+export ZVOL="${FULLNAME##*/}"
+
+#sudo zfs clone nvmepool0/ubs-21.10-template@20220109045211-initial nvmepool0/ubs-avalon-0
+sudo zfs clone ${TEMPLATE} ${FULLNAME}
+./export-zvol-iscsi ${FULLNAME}
+virt-install --accelerate --hvm --name ${ZVOL} --ram ${RAM} --cpu host-passthrough --vcpus ${CPUS} --disk vol=${ZVOL}/unit:0:0:0 --network bridge=bridge0 --network bridge=avalon-bridge --os-type=linux --os-variant=ubuntu20.04 --graphics spice --print-xml > ${TMPXMHELL}
+ 
+#virsh pool-define ${TMPXMHELL}
+#virsh pool-start ${ZVOL}
+#virsh pool-autostart ${ZVOL}
+virsh define ${TMPXMHELL}
+
+sudo virt-sysprep -d ${ZVOL} --copy-in /tank-altera/salt/salt-bootstrap/bootstrap-salt.sh:/root/ --run-command '/root/bootstrap-salt.sh -X -A salt.noctilucent.cat stable' --network --hostname ${ZVOL}
+
+virsh start ${ZVOL}
+
+rm -f ${TMPXMHELL}
+
